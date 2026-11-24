@@ -1,0 +1,287 @@
+<title>Alkalinity Export Explorer</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+/* Layout: control rail on the left, results on the right; stacks on phones. Palette from basalt, porewater and calcite. */
+:root{
+  --bg:#f5f6f4; --panel:#ffffff; --ink:#1d2326; --muted:#5d686d; --line:#d9dedc;
+  --accent:#1f5f7a; --water:#2f7fb5; --stock:#6a8f4e; --calcite:#c9a45c; --mg:#9a7bb0; --warn:#b5482f;
+  --font-body:"Public Sans",system-ui,sans-serif; --font-mono:"JetBrains Mono",ui-monospace,monospace;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --bg:#121618; --panel:#1a2023; --ink:#e4e9ea; --muted:#9aa7ac; --line:#2c3539;
+  --accent:#6fb3d2; --water:#5aa7dc; --stock:#94bb74; --calcite:#dcbd7a; --mg:#b99ad0; --warn:#e07a5f; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#121618; --panel:#1a2023; --ink:#e4e9ea; --muted:#9aa7ac; --line:#2c3539;
+  --accent:#6fb3d2; --water:#5aa7dc; --stock:#94bb74; --calcite:#dcbd7a; --mg:#b99ad0; --warn:#e07a5f; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:14px;line-height:1.45}
+.wrap{max-width:1280px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+header h1{font-size:1.5rem;margin:0 0 4px;text-wrap:balance;letter-spacing:-.01em}
+header p{margin:0;color:var(--muted);max-width:75ch}
+.formula{font-family:var(--font-mono);font-size:12.5px;background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:8px 12px;margin:12px 0 0;overflow-x:auto;white-space:nowrap}
+.grid{display:grid;grid-template-columns:330px minmax(0,1fr);gap:20px;margin-top:18px}
+@media (max-width:860px){.grid{grid-template-columns:1fr}}
+aside{display:flex;flex-direction:column;gap:14px}
+fieldset{border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:10px 12px 12px;margin:0;display:flex;flex-direction:column;gap:9px;min-width:0}
+legend{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--muted);font-weight:600;padding:0 4px}
+label{display:flex;flex-direction:column;gap:3px;font-size:12.5px}
+.row{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.val{font-family:var(--font-mono);font-size:12px;color:var(--accent);white-space:nowrap}
+.hint{font-size:11.5px;color:var(--muted)}
+.q{font-size:10.5px;font-family:var(--font-mono);color:var(--warn);border:1px solid currentColor;border-radius:3px;padding:0 3px;margin-left:4px}
+select,input[type=range]{width:100%;accent-color:var(--accent)}
+select{font:inherit;padding:4px 6px;border:1px solid var(--line);border-radius:5px;background:var(--bg);color:var(--ink)}
+input[type=checkbox]{accent-color:var(--accent)}
+.check{flex-direction:row;align-items:center;gap:6px}
+main{display:flex;flex-direction:column;gap:16px;min-width:0}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:10px 12px}
+.tile .k{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.tile .v{font-family:var(--font-mono);font-size:20px;font-variant-numeric:tabular-nums;margin-top:2px}
+.tile .s{font-size:11.5px;color:var(--muted)}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid currentColor}
+.binds{color:var(--warn)} .free{color:var(--stock)}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px;min-width:0}
+.card h2{font-size:13px;margin:0 0 8px;font-weight:600}
+.chartbox{position:relative;height:300px}
+.chartbox.small{height:220px}
+.btns{display:flex;gap:8px;flex-wrap:wrap}
+button{font:inherit;font-size:12.5px;padding:5px 10px;border-radius:5px;border:1px solid var(--line);background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--accent)} button:focus-visible,select:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+table{border-collapse:collapse;width:100%;font-size:12.5px}
+td,th{padding:4px 6px;border-bottom:1px solid var(--line);text-align:left}
+td.n,th.n{text-align:right;font-family:var(--font-mono);font-variant-numeric:tabular-nums}
+.maphead{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:6px}
+.maphead h2{margin:0}
+.inline{flex-direction:row;align-items:center;gap:6px}
+.inline select{width:auto}
+.mapbox{overflow-x:auto}
+.mapbox svg{width:100%;min-width:560px;height:auto;display:block;background:var(--bg);border-radius:6px}
+.land{fill:var(--line);stroke:none}
+.pie{cursor:pointer}
+.pie path{stroke:var(--panel);stroke-width:.25}
+.pie .ring{fill:none;stroke:var(--ink);stroke-width:.6}
+.pie text{font-size:3.4px;fill:var(--ink);font-family:var(--font-body)}
+.pie:focus-visible{outline:none} .pie:focus-visible .ring{stroke:var(--accent);stroke-width:1}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:12px;margin-top:8px;color:var(--muted)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+#ddtitle{font-size:15px;margin:0}
+.notes{font-size:12.5px;color:var(--muted)} .notes li{margin-bottom:4px}
+</style>
+
+<div class="wrap">
+<header>
+  <h1>Alkalinity Export Explorer</h1>
+  <p>Sandbox for the soil alkalinity budget: how much of the alkalinity released by basalt actually leaves the soil in drainage, and what sets that. Runs the model's Layer 3 export rule in your browser at one site, 10–40 years. Test settings only; nothing here is credited.</p>
+  <div class="formula">export = min( κ × stock , ceiling )   ceiling = q × [Alk]<sub>max</sub>(pCO₂, T, SI)   dissolution ∝ X<sub>kin</sub>(pH) × η,  η = q/(q + τ·D<sub>w</sub>)</div>
+</header>
+
+<div class="grid">
+<aside>
+  <fieldset><legend>Application</legend>
+    <label for="appmode">Mode<select id="appmode"><option value="annual">Fixed rate every year</option><option value="topup">Top up to 30 t/ha (as needed)</option></select></label>
+    <label for="app"><span class="row">Rate <span class="val" id="app_v"></span></span><input type="range" id="app" min="5" max="60" step="5" value="40"></label>
+    <label for="horizon"><span class="row">Years <span class="val" id="horizon_v"></span></span><input type="range" id="horizon" min="5" max="40" step="1" value="10"></label>
+    <label for="anchor">Year-1 dissolved at reference (anchor)<select id="anchor"><option value="0.041">0.041 (low)</option><option value="0.12" selected>0.12 (central)</option><option value="0.231">0.231 (high)</option></select></label>
+  </fieldset>
+
+  <fieldset><legend>Water</legend>
+    <label for="drain">Drainage q<select id="drain"><option value="tc">TerraClimate (rain-fed, v3)</option><option value="wg">WaterGAP (rain-fed)</option><option value="low">WaterGAP + irrigation, low</option><option value="central" selected>WaterGAP + irrigation, central</option><option value="high">WaterGAP + irrigation, high</option></select></label>
+    <label for="dw"><span class="row">D<sub>w</sub> <span class="val" id="dw_v"></span><span class="q">Q8</span></span><input type="range" id="dw" min="-3" max="-0.5" step="0.05" value="-1.523"></label>
+    <label class="check" for="tau"><input type="checkbox" id="tau"> Include τ = e² in η (Maher &amp; Chamberlain Eq. 3) <span class="q">Q9</span></label>
+    <label class="check" for="qref"><input type="checkbox" id="qref" checked> Normalise η to q<sub>ref</sub> = 178 mm/yr (keeps the anchor at typical cropland)</label>
+  </fieldset>
+
+  <fieldset><legend>Soil CO₂ and saturation</legend>
+    <label for="pdry"><span class="row">pCO₂ drained <span class="val" id="pdry_v"></span><span class="q">Q1</span></span><input type="range" id="pdry" min="3" max="4.6" step="0.02" value="3.602"></label>
+    <label for="pwet"><span class="row">pCO₂ flooded <span class="val" id="pwet_v"></span><span class="q">Q1b</span></span><input type="range" id="pwet" min="4" max="5.6" step="0.02" value="4.699"></label>
+    <label for="fflood"><span class="row">Flooded share <span class="val" id="fflood_v"></span><span class="q">Q6</span></span><input type="range" id="fflood" min="-0.01" max="1" step="0.01" value="-0.01"></label>
+    <label for="si">Calcite saturation index for the ceiling<select id="si"><option value="0">0 (strict equilibrium)</option><option value="0.5" selected>0.5 (Zeke's central)</option><option value="1">1</option></select><span class="q" style="align-self:flex-start">Q4</span></label>
+    <label for="capoff"><span class="row">pH cap = saturation pH + <span class="val" id="capoff_v"></span></span><input type="range" id="capoff" min="0" max="0.6" step="0.05" value="0.3"></label>
+  </fieldset>
+
+  <fieldset><legend>Export rule and soil</legend>
+    <label for="rule">Rule<select id="rule"><option value="legacy">Legacy: κ × last year's stock (no ceiling)</option><option value="kc" selected>κ × stock, capped by drainage ceiling (L3 simple)</option><option value="conly">Ceiling only: water carries all it can</option></select></label>
+    <label for="ksrc">κ source<select id="ksrc"><option value="wg" selected>WaterGAP (+ irrigation): drains ÷ water input</option><option value="tc">TerraClimate (P − AET)/P (legacy)</option></select></label>
+    <label for="kappa"><span class="row">κ (fraction of stock leaving per year) <span class="val" id="kappa_v"></span><span class="q">Q2</span></span><input type="range" id="kappa" min="-0.01" max="1" step="0.01" value="-0.01"></label>
+    <label for="bmult"><span class="row">Buffer B (× CEC-based value) <span class="val" id="bmult_v"></span><span class="q">Q3</span></span><input type="range" id="bmult" min="0.25" max="4" step="0.25" value="1"></label>
+  </fieldset>
+  <div class="btns"><button id="pin" type="button">Pin as baseline</button><button id="unpin" type="button">Clear baseline</button><button id="reset" type="button">Reset to model defaults</button></div>
+</aside>
+
+<main>
+  <div class="card">
+    <div class="maphead"><h2>Where the released alkalinity has gone after <span id="maphz"></span>, by site</h2>
+      <label for="size" class="inline">Pie size<select id="size"><option value="rel" selected>Alkalinity released</option><option value="diss">Mean dissolved fraction</option><option value="share">Exported share</option></select></label></div>
+    <div class="mapbox"><svg id="map" viewBox="0 0 360 135" role="img" aria-label="World map with one pie chart per site showing exported, held, calcite and excess Mg shares"></svg></div>
+    <div class="legend"><span><i style="background:var(--water)"></i>Exported</span><span><i style="background:var(--stock)"></i>Held on exchange sites</span><span><i style="background:var(--calcite)"></i>Calcite pool</span><span><i style="background:var(--mg)"></i>Excess Mg</span><span id="sizenote"></span></div>
+    <p class="hint">Every pie uses the settings on the left. Click a pie, or pick a site in the panel, to open it below.</p>
+  </div>
+  <div class="card" id="deepdive"><div class="maphead"><h2 id="ddtitle"></h2>
+    <label for="site" class="inline">Site<select id="site"></select></label></div>
+    <div class="hint" id="siteinfo"></div></div>
+  <div class="tiles" id="tiles"></div>
+  <div class="card"><h2>Where the released alkalinity has gone (cumulative, kg CaCO₃-eq/ha) and soil pH</h2><div class="chartbox"><canvas id="c1"></canvas></div></div>
+  <div class="card"><h2>Reading it</h2><ul class="notes">
+    <li><b>Pie size</b> is total alkalinity released by the final year (or the dissolved fraction or exported share, from the switch). Slices are where that alkalinity sits at the end.</li>
+    <li><b>Ceiling binds</b> when drainage cannot carry the alkalinity the rule wants to export. The rest stays in the soil, raises pH up to the saturation cap, then precipitates as calcite.</li>
+    <li><b>Q-tags</b> mark the open questions in the Alison meeting note. Slide them to see which ones change the answer at a given site.</li>
+    <li><b>Simplified on purpose:</b> one site mean (control sites average 5 cropland points), no exchange/porewater split, no acid inputs or secondary minerals, excess Mg never exported. Site means can differ slightly from the 5-point model runs.</li>
+    <li>Source: branch <code>v4-irrigated-drainage</code>, provenance entries C13–C14; tables built by <code>scripts/export_explorer_data.py</code>.</li>
+  </ul></div>
+</main>
+</div>
+</div>
+
+<script id="data" type="application/json">__DATA__</script>
+<script id="model">
+const D = JSON.parse(document.getElementById("data").textContent);
+function interp1(x, xs, ys){ if(x<=xs[0]) return ys[0]; const n=xs.length; if(x>=xs[n-1]) return ys[n-1];
+  let lo=0,hi=n-1; while(hi-lo>1){const m=(lo+hi)>>1; if(xs[m]<=x) lo=m; else hi=m;} const t=(x-xs[lo])/(xs[hi]-xs[lo]); return ys[lo]+t*(ys[hi]-ys[lo]); }
+function table2(tab, T, p){ // tab[iT][iP]; bilinear in T and log pCO2
+  const lp=Math.log(p), lps=D.pco2_grid.map(Math.log), rows=tab.map(r=>interp1(lp,lps,r)); return interp1(T, D.T_grid, rows); }
+const alkMax=(si,T,p)=>table2(D.alk_max[si],T,p);
+const satPH=(si,T,p)=>table2(D.sat_pH[si],T,p);
+function Fof(U, anchor){ const us=D.U_grid, fs=D.F[anchor]; if(U>=us[us.length-1]) return 1; return interp1(U,us,fs); }
+function eta(q_m, Dw, tau){ const k=(tau?Math.exp(2):1)*Dw; return q_m/(q_m+k); }
+
+function run(site, o){
+  // water
+  let q=site.q_wg_mm, leak=0, s=0;
+  if(o.drain==="tc") q=site.q_tc_mm; else if(o.drain!=="wg"){ leak=site.leak_mm[o.drain]; s=site.s_irr; }
+  const qm=q/1000, lm=leak/1000;
+  let W = s*eta(qm+lm,o.Dw,o.tau)+(1-s)*eta(qm,o.Dw,o.tau);
+  const etaRaw=W; if(o.qref) W/=eta(D.q_ref_mm/1000,o.Dw,o.tau);
+  const qcell=qm+s*lm;
+  // chemistry
+  const f = o.fflood<0 ? site.f_flood : o.fflood;
+  const alk=(1-f)*alkMax(o.si,site.T_C,o.pdry)+f*alkMax(o.si,site.T_C,o.pwet);
+  const ceiling=qcell*1e7*alk/20;
+  const kb = (o.drain==="low"||o.drain==="high") ? o.drain : "central";
+  const kappa = o.kappa>=0 ? o.kappa : (o.ksrc==="tc" ? site.kappa : site.kappa_wg[kb]);
+  const B = site.CEC*D.B_per_CEC*o.bmult;
+  const cap = Math.max(satPH("0.5",site.T_C,o.pdry)+o.capoff, site.pH0);
+  const Emax = B*(cap-site.pH0);
+  const H=o.horizon, lime=D.lime_kg_per_t, fca=D.f_ca;
+  const S=[0], m=[]; let E=0, calc=0, mgx=0, expc=0, relc=0, tonPrev=0, Dsum=0;
+  const out={pH:[],rel:[],exp:[],ceil:[],E:[],calc:[],mgx:[],expc:[],binds:0,diss:[],undiss:[]};
+  for(let t=0;t<H;t++){
+    const pH=Math.min(site.pH0+E/B,cap);
+    m.push(o.appmode==="annual"? o.app : (t===0?30:Math.min(30,tonPrev)));
+    const X=interp1(pH,D.pH_grid,site.Xkin)*W;
+    S.push(S[t]+X);
+    let Dt=0, ton=0, stock=0;
+    for(let j=0;j<=t;j++){ const Fn=Fof(S[t+1]-S[j],o.anchor), Fo=Fof(S[t]-S[j],o.anchor); Dt+=Fn-Fo; ton+=m[j]*(Fn-Fo); stock+=m[j]*(1-Fn); }
+    Dsum+=Dt; tonPrev=ton;
+    const R = o.appmode==="annual" ? o.app*lime*Dt : lime*ton;
+    let ex;
+    if(o.rule==="legacy"){ const Epre=Math.max(0,(1-kappa)*E+R); ex=kappa*E; const exc=Math.max(0,Epre-Emax); E=Math.min(Epre,Emax); calc+=fca*exc; mgx+=(1-fca)*exc; }
+    else { const Epre=Math.max(0,E+R); const exc=Math.max(0,Epre-Emax); const Es=Math.min(Epre,Emax); calc+=fca*exc; mgx+=(1-fca)*exc;
+      const want = o.rule==="kc" ? kappa*Es : Es; ex=Math.min(want,ceiling); if(want>ceiling+1e-9 && ceiling>0) out.binds++; E=Es-ex; }
+    expc+=ex; relc+=R;
+    out.pH.push(pH); out.rel.push(R); out.exp.push(ex); out.ceil.push(ceiling); out.E.push(E); out.calc.push(calc); out.mgx.push(mgx); out.expc.push(expc);
+    out.diss.push(ton); out.undiss.push(stock);
+  }
+  const gate=Math.abs(relc-(E+calc+mgx+expc))/Math.max(relc,1e-9);
+  Object.assign(out,{W,etaRaw,ceiling,alk,kappa,f,cap,B,qcell,relc,D_avg:(o.appmode==="annual"?Dsum/H:out.diss.reduce((a,b)=>a+b,0)/m.reduce((a,b)=>a+b,0)),gate});
+  return out;
+}
+if (typeof module!=="undefined") module.exports={run,D};
+</script>
+<script>
+(function(){
+const $=id=>document.getElementById(id);
+const sel=$("site");
+let grp=null, og=null;
+D.sites.forEach((s,i)=>{ if(s.group!==grp){ og=document.createElement("optgroup"); og.label=s.group; sel.appendChild(og); grp=s.group; }
+  const o=document.createElement("option"); o.value=i; o.textContent=s.name; og.appendChild(o); });
+const DEF={site:"0",appmode:"annual",app:"40",horizon:"10",anchor:"0.12",drain:"central",dw:String(Math.log10(0.03)),tau:false,qref:true,
+  pdry:String(Math.log10(4000)),pwet:String(Math.log10(50000)),fflood:"-0.01",si:"0.5",capoff:"0.3",rule:"kc",ksrc:"wg",kappa:"-0.01",bmult:"1"};
+function opts(){ return {appmode:$("appmode").value, app:+$("app").value, horizon:+$("horizon").value, anchor:$("anchor").value,
+  drain:$("drain").value, Dw:10**(+$("dw").value), tau:$("tau").checked, qref:$("qref").checked,
+  pdry:10**(+$("pdry").value), pwet:10**(+$("pwet").value), fflood:+$("fflood").value, si:$("si").value, capoff:+$("capoff").value,
+  rule:$("rule").value, ksrc:$("ksrc").value, kappa:+$("kappa").value, bmult:+$("bmult").value}; }
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const fmt=(x,d=0)=>x.toLocaleString(undefined,{maximumFractionDigits:d,minimumFractionDigits:d});
+let c1,pinned=null;
+function charts(){
+  Chart.defaults.font.family=css("--font-body"); Chart.defaults.color=css("--muted"); Chart.defaults.borderColor=css("--line");
+  c1=new Chart($("c1"),{type:"line",data:{labels:[],datasets:[]},options:{maintainAspectRatio:false,animation:false,interaction:{mode:"index",intersect:false},
+    scales:{y:{stacked:true,beginAtZero:true,title:{display:true,text:"kg CaCO₃-eq/ha"}},y2:{position:"right",min:4,max:9,grid:{drawOnChartArea:false},title:{display:true,text:"soil pH"}},x:{title:{display:true,text:"year"}}},
+    plugins:{legend:{labels:{boxWidth:12}}}}});
+}
+function update(){
+  const s=D.sites[+sel.value], o=opts(), r=run(s,o);
+  $("siteinfo").textContent=`${s.lat}°, ${s.lon}° · T ${s.T_C} °C · pH ${s.pH0} · CEC ${s.CEC} cmol/kg · κ ${s.kappa_wg.central} (WaterGAP) / ${s.kappa} (TerraClimate) · flooded share ${s.f_flood} · irrigated share ${s.s_irr}`;
+  $("app_v").textContent=o.appmode==="annual"?`${o.app} t/ha/yr`:"top-up"; $("app").disabled=o.appmode!=="annual";
+  $("horizon_v").textContent=`${o.horizon} yr`; $("dw_v").textContent=`${o.Dw.toPrecision(2)} m/yr${o.tau?` (τD_w ${(o.Dw*Math.exp(2)).toPrecision(2)})`:""}`;
+  $("pdry_v").textContent=`${fmt(o.pdry)} µatm`; $("pwet_v").textContent=`${fmt(o.pwet)} µatm`;
+  $("fflood_v").textContent=o.fflood<0?`site (${s.f_flood})`:o.fflood.toFixed(2); $("capoff_v").textContent=o.capoff.toFixed(2);
+  $("kappa_v").textContent=o.kappa<0?`site (${r.kappa.toFixed(2)})`:o.kappa.toFixed(2); $("kappa").disabled=o.rule==="conly"; $("bmult_v").textContent=`×${o.bmult}`;
+  const H=o.horizon, last=H-1, meanExp=r.exp.slice(1).reduce((a,b)=>a+b,0)/Math.max(1,H-1);
+  const bind=r.binds>0, share=r.expc[last]/Math.max(r.relc,1e-9);
+  $("ddtitle").textContent=`Deep dive: ${s.name}`;
+  $("tiles").innerHTML=[
+    ["Location",`${s.lat}°, ${s.lon}°`,`${s.group.startsWith("Control")?"control site, 5-point mean":"irrigated / paddy site"} · pH ${s.pH0} · ${s.T_C} °C`],
+    ["Water multiplier η",fmt(r.W,2),`raw η ${fmt(r.etaRaw,2)} · q ${fmt(r.qcell*1000)} mm/yr`],
+    ["Drainage ceiling",fmt(r.ceiling),`kg/ha/yr · [Alk]max ${fmt(r.alk*1000,1)} mmol/L`],
+    ["Mean export, yr 2–"+H,fmt(meanExp),`kg/ha/yr · <span class="pill ${bind?"binds":"free"}">${bind?`ceiling binds ${r.binds}/${H} yr`:"ceiling not binding"}</span>`],
+    ["Exported share",fmt(share*100,0)+"%",`of ${fmt(r.relc)} kg released by yr ${H}`],
+    ["Calcite pool, yr "+H,fmt(r.calc[last]),`kg/ha · excess Mg ${fmt(r.mgx[last])}`],
+    ["Soil pH, yr "+H,fmt(r.pH[last],2),`start ${s.pH0} · cap ${fmt(r.cap,2)}`],
+    ["Mean dissolved fraction",fmt(r.D_avg,3),o.appmode==="annual"?"per year, average":"of rock applied"]
+  ].map(([k,v,sx])=>`<div class="tile"><div class="k">${k}</div><div class="v">${v}</div><div class="s">${sx}</div></div>`).join("");
+  const yrs=[...Array(H).keys()].map(i=>i+1);
+  c1.data.labels=yrs;
+  c1.data.datasets=[
+    {label:"Exported",data:r.expc,backgroundColor:css("--water")+"cc",borderColor:css("--water"),fill:true,pointRadius:0,stack:"a"},
+    {label:"Held on exchange sites",data:r.E,backgroundColor:css("--stock")+"bb",borderColor:css("--stock"),fill:true,pointRadius:0,stack:"a"},
+    {label:"Calcite pool",data:r.calc,backgroundColor:css("--calcite")+"bb",borderColor:css("--calcite"),fill:true,pointRadius:0,stack:"a"},
+    {label:"Excess Mg",data:r.mgx,backgroundColor:css("--mg")+"99",borderColor:css("--mg"),fill:true,pointRadius:0,stack:"a"},
+    {label:"Soil pH",data:r.pH,borderColor:css("--ink"),borderWidth:2,pointRadius:0,fill:false,yAxisID:"y2",stack:"p"}];
+  if(pinned&&pinned.expc.length){ c1.data.datasets.push({label:"Baseline: exported",data:pinned.expc.slice(0,H),borderColor:css("--warn"),borderDash:[5,4],borderWidth:2,pointRadius:0,fill:false,stack:"b"}); }
+  c1.update();
+  drawMap(o);
+  window.__last=r;
+}
+const NS="http://www.w3.org/2000/svg";
+function svgEl(t,a){const e=document.createElementNS(NS,t); for(const k in a) e.setAttribute(k,a[k]); return e;}
+function drawMap(o){
+  const svg=$("map"); svg.textContent="";
+  svg.appendChild(svgEl("path",{d:D.world,class:"land"}));
+  const H=o.horizon, rs=D.sites.map(s=>run(s,o));
+  const metric=$("size").value;
+  const val=r=>metric==="rel"?r.relc:metric==="diss"?r.D_avg:r.expc[H-1]/Math.max(r.relc,1e-9);
+  const vmax=Math.max(...rs.map(val),1e-9);
+  $("maphz").textContent=`${H} years`;
+  $("sizenote").textContent=metric==="rel"?`Largest pie: ${fmt(vmax)} kg CaCO₃-eq/ha released`:metric==="diss"?`Largest pie: dissolved fraction ${fmt(vmax,2)}`:`Largest pie: ${fmt(vmax*100)}% exported`;
+  const cols=[css("--water"),css("--stock"),css("--calcite"),css("--mg")];
+  D.sites.forEach((s,i)=>{
+    const r=rs[i], cx=s.lon+180, cy=75-s.lat, R=2.2+7.8*Math.sqrt(val(r)/vmax);
+    const parts=[r.expc[H-1],r.E[H-1],r.calc[H-1],r.mgx[H-1]], tot=parts.reduce((a,b)=>a+b,0);
+    const g=svgEl("g",{class:"pie",tabindex:"0",role:"button","aria-label":`${s.name}: ${fmt(100*parts[0]/Math.max(tot,1e-9))}% exported`});
+    const title=svgEl("title",{}); title.textContent=`${s.name}\nExported ${fmt(100*parts[0]/Math.max(tot,1e-9))}% · held ${fmt(100*parts[1]/Math.max(tot,1e-9))}% · calcite ${fmt(100*parts[2]/Math.max(tot,1e-9))}% · excess Mg ${fmt(100*parts[3]/Math.max(tot,1e-9))}%\nReleased ${fmt(r.relc)} kg/ha`; g.appendChild(title);
+    let a0=-Math.PI/2;
+    if(tot<=0){ g.appendChild(svgEl("circle",{cx,cy,r:R,fill:css("--muted")})); }
+    else parts.forEach((v,k)=>{ if(v<=0) return; const f=v/tot;
+      if(f>0.9999){ g.appendChild(svgEl("circle",{cx,cy,r:R,fill:cols[k]})); return; }
+      const a1=a0+f*2*Math.PI, x0=cx+R*Math.cos(a0), y0=cy+R*Math.sin(a0), x1=cx+R*Math.cos(a1), y1=cy+R*Math.sin(a1);
+      g.appendChild(svgEl("path",{d:`M${cx} ${cy}L${x0} ${y0}A${R} ${R} 0 ${f>0.5?1:0} 1 ${x1} ${y1}Z`,fill:cols[k]})); a0=a1; });
+    if(String(i)===sel.value) g.appendChild(svgEl("circle",{cx,cy,r:R+0.9,class:"ring"}));
+    const lab=svgEl("text",{x:cx,y:cy+R+4,"text-anchor":"middle"}); lab.textContent=s.name.split(",")[0].replace("Neumann paddy","Bangladesh paddy"); g.appendChild(lab);
+    const pick=()=>{ sel.value=String(i); update(); $("deepdive").scrollIntoView({behavior:matchMedia("(prefers-reduced-motion: reduce)").matches?"auto":"smooth",block:"start"}); };
+    g.addEventListener("click",pick); g.addEventListener("keydown",e=>{ if(e.key==="Enter"||e.key===" "){ e.preventDefault(); pick(); } });
+    svg.appendChild(g);
+  });
+}
+function setDefaults(){ for(const [k,v] of Object.entries(DEF)){ const el=$(k); if(el.type==="checkbox") el.checked=v; else el.value=v; } }
+document.querySelectorAll("select,input").forEach(el=>el.addEventListener("input",update));
+$("pin").onclick=()=>{ pinned=window.__last; update(); };
+$("unpin").onclick=()=>{ pinned=null; update(); };
+$("reset").onclick=()=>{ setDefaults(); update(); };
+setDefaults(); charts(); update();
+matchMedia("(prefers-color-scheme: dark)").addEventListener("change",()=>{ c1.destroy(); charts(); update(); });
+})();
+</script>
